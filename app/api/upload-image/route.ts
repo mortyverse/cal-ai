@@ -1,4 +1,5 @@
 import { NextRequest, NextResponse } from 'next/server'
+import { parseWebhookResponse, type AnalyzeResult } from '@/lib/utils'
 
 const WEBHOOK_URL = 'https://leehan.app.n8n.cloud/webhook-test/3f7989cc-4003-4635-a611-33bcdb90ca93'
 
@@ -87,10 +88,34 @@ export async function POST(request: NextRequest) {
       webhookResponse: webhookResult,
     })
 
+    // 웹훅 응답을 분석 결과로 변환
+    const analyzeResult = parseWebhookResponse(webhookResult)
+
+    if (!analyzeResult.success) {
+      console.error('❌ 웹훅 응답 파싱 실패:', analyzeResult.error)
+      return NextResponse.json({
+        success: false,
+        error: analyzeResult.error?.message || '분석 결과를 처리할 수 없습니다.',
+        details: '웹훅 응답을 분석하는 중 오류가 발생했습니다.',
+        debug: {
+          originalFile: {
+            name: file.name,
+            size: file.size,
+            type: file.type,
+          },
+          webhookUrl: WEBHOOK_URL,
+          responseStatus: webhookResponse.status,
+          webhookResponse: webhookResult,
+        }
+      }, { status: 422 })
+    }
+
+    console.log('✅ 분석 결과 변환 완료:', analyzeResult.data)
+
     return NextResponse.json({
       success: true,
-      message: '이미지가 성공적으로 전송되었습니다.',
-      webhookResponse: webhookResult,
+      message: '이미지가 성공적으로 분석되었습니다.',
+      data: analyzeResult.data,
       debug: {
         originalFile: {
           name: file.name,

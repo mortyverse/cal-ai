@@ -44,12 +44,19 @@ export default function WebhookDebugPage() {
 
       const result = await response.json()
 
-      if (response.ok) {
+      if (response.ok && result.data) {
         setStatus('success')
         setResult(result)
+
+        console.log('✅ 디버그 테스트 성공:')
+        console.log('📊 분석된 음식:', result.data.items.length, '개')
+        console.log('🔥 총 칼로리:', result.data.summary.totalCalories, 'kcal')
+        console.log('🍽️ 식사 유형:', result.data.mealType)
+        console.log('📋 전체 데이터:', result.data)
       } else {
         setStatus('error')
-        setError(result.error || '알 수 없는 오류')
+        setError(result.error || result.details || '알 수 없는 오류')
+        console.error('❌ 디버그 테스트 실패:', result)
       }
 
     } catch (error) {
@@ -109,30 +116,66 @@ export default function WebhookDebugPage() {
                     <h3 className="font-semibold text-green-800">테스트 성공!</h3>
                   </div>
 
-                  <div className="space-y-3">
-                    <div>
-                      <p className="text-sm font-medium text-green-700">응답 메시지</p>
-                      <p className="text-sm text-green-600">{result.message}</p>
-                    </div>
-
-                    {result.debug && (
-                      <div>
-                        <p className="text-sm font-medium text-green-700">디버그 정보</p>
-                        <pre className="text-xs text-green-600 bg-green-100 p-2 rounded mt-1 overflow-x-auto">
-                          {JSON.stringify(result.debug, null, 2)}
-                        </pre>
-                      </div>
-                    )}
-
-                    {result.webhookResponse && (
-                      <div>
-                        <p className="text-sm font-medium text-green-700">웹훅 응답</p>
-                        <pre className="text-xs text-green-600 bg-green-100 p-2 rounded mt-1 overflow-x-auto">
-                          {JSON.stringify(result.webhookResponse, null, 2)}
-                        </pre>
-                      </div>
-                    )}
+                <div className="space-y-4">
+                  <div>
+                    <p className="text-sm font-medium text-green-700">응답 메시지</p>
+                    <p className="text-sm text-green-600">{result.message}</p>
                   </div>
+
+                  {result.data && (
+                    <div>
+                      <p className="text-sm font-medium text-green-700 mb-2">분석 결과</p>
+                      <div className="bg-green-50 border border-green-200 rounded-lg p-4">
+                        <div className="grid grid-cols-2 gap-4 mb-4">
+                          <div>
+                            <p className="text-xs text-green-600">분석된 음식</p>
+                            <p className="font-semibold text-green-800">{result.data.items.length}개</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-green-600">총 칼로리</p>
+                            <p className="font-semibold text-green-800">{result.data.summary.totalCalories} kcal</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-green-600">식사 유형</p>
+                            <p className="font-semibold text-green-800">{result.data.mealType}</p>
+                          </div>
+                          <div>
+                            <p className="text-xs text-green-600">이미지 URL</p>
+                            <p className="font-semibold text-green-800 truncate text-xs">
+                              {result.data.imageUrl || '제공되지 않음'}
+                            </p>
+                          </div>
+                        </div>
+
+                        <div>
+                          <p className="text-xs font-medium text-green-700 mb-2">음식 목록</p>
+                          <div className="space-y-2 max-h-32 overflow-y-auto">
+                            {result.data.items.map((item: any, index: number) => (
+                              <div key={index} className="bg-white p-2 rounded text-xs">
+                                <div className="flex justify-between items-center">
+                                  <span className="font-medium">{item.foodName}</span>
+                                  <span className="text-green-600">{item.calories} kcal</span>
+                                </div>
+                                <div className="text-gray-500 text-xs">
+                                  정확도: {(item.confidence * 100).toFixed(0)}% • {item.quantity}
+                                </div>
+                              </div>
+                            ))}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  )}
+
+                  {result.debug && (
+                    <div>
+                      <p className="text-sm font-medium text-green-700">디버그 정보</p>
+                      <pre className="text-xs text-green-600 bg-green-100 p-2 rounded mt-1 overflow-x-auto">
+                        {JSON.stringify(result.debug, null, 2)}
+                      </pre>
+                    </div>
+                  )}
+                </div>
                 </div>
               )}
 

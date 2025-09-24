@@ -61,9 +61,24 @@ export interface AnalyzeResult {
 export interface ImageUploadResponse {
   success: boolean;
   message: string;
-  webhookResponse?: any;
+  data?: {
+    items: FoodItem[];
+    summary: NutritionSummary;
+    mealType: string;
+    imageUrl: string;
+    webhookResponse?: any;
+  };
   error?: string;
   details?: string;
+  debug?: {
+    originalFile: {
+      name: string;
+      size: number;
+      type: string;
+    };
+    webhookUrl: string;
+    responseStatus: number;
+  };
 }
 
 export interface WebhookPayload {

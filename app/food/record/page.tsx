@@ -9,10 +9,9 @@ import { getMockUser } from '@/lib/auth-bypass'
 import { useEffect } from 'react'
 import { validateImageFile, createImagePreview, revokeImagePreview, formatFileSize } from '@/lib/utils'
 
-type RecordState = 
+type RecordState =
   | { status: 'idle' }
   | { status: 'uploading'; progress: number }
-  | { status: 'analyzing' }
   | { status: 'success'; data: any }
   | { status: 'error'; error: string }
 
@@ -94,38 +93,16 @@ export default function FoodRecordPage() {
         throw new Error(result.error || '업로드 실패')
       }
 
-      // 분석 시뮬레이션 (웹훅에서 처리된 결과를 기다리는 시간)
-      setState({ status: 'analyzing' })
-      await new Promise(resolve => setTimeout(resolve, 3000))
-
-      // 웹훅 응답에서 결과 추출 (실제 구현에서는 웹훅 응답을 기반으로 함)
-      const mockResult = {
-        items: [
-          {
-            foodName: "김치볶음밥",
-            confidence: 0.95,
-            quantity: "1 그릇 (300g)",
-            calories: 520,
-            nutrients: {
-              carbohydrates: { value: 78.2, unit: "g" },
-              protein: { value: 12.5, unit: "g" },
-              fat: { value: 15.8, unit: "g" },
-              sugars: { value: 4.2, unit: "g" },
-              sodium: { value: 1200.0, unit: "mg" }
-            }
-          }
-        ],
-        summary: {
-          totalCalories: 520,
-          totalCarbohydrates: { value: 78.2, unit: "g" },
-          totalProtein: { value: 12.5, unit: "g" },
-          totalFat: { value: 15.8, unit: "g" }
-        },
-        mealType: "점심",
-        webhookResponse: result.webhookResponse
+      // 실제 웹훅 응답 데이터 사용
+      if (!result.data) {
+        throw new Error('분석 데이터를 받을 수 없습니다.')
       }
 
-      setState({ status: 'success', data: mockResult })
+      console.log('✅ 실제 웹훅 데이터 수신:', result.data)
+      console.log('📊 분석된 음식:', result.data.items.length, '개')
+      console.log('🔥 총 칼로리:', result.data.summary.totalCalories)
+
+      setState({ status: 'success', data: result.data })
     } catch (error) {
       console.error('업로드 오류:', error)
       setState({ 
@@ -258,20 +235,6 @@ export default function FoodRecordPage() {
             </div>
           )}
 
-          {state.status === 'analyzing' && (
-            <div className="text-center">
-              <div className="w-24 h-24 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                <div className="animate-spin rounded-full h-12 w-12 border-b-2 border-green-600"></div>
-              </div>
-              <h2 className="text-2xl font-bold text-gray-900 mb-2">AI 분석 중...</h2>
-              <p className="text-gray-600 mb-8">음식을 인식하고 영양성분을 계산하고 있습니다.</p>
-              <div className="bg-yellow-50 border border-yellow-200 rounded-lg p-4">
-                <p className="text-sm text-yellow-800">
-                  💡 분석에는 약 10-15초가 소요됩니다.
-                </p>
-              </div>
-            </div>
-          )}
 
           {state.status === 'success' && (
             <div className="text-center">
@@ -279,7 +242,10 @@ export default function FoodRecordPage() {
                 <CheckCircle className="w-12 h-12 text-green-600" />
               </div>
               <h2 className="text-2xl font-bold text-gray-900 mb-2">분석 완료!</h2>
-              <p className="text-gray-600 mb-8">음식이 성공적으로 인식되었습니다.</p>
+              <p className="text-gray-600 mb-2">음식이 성공적으로 인식되었습니다.</p>
+              <p className="text-sm text-blue-600 mb-8 font-medium">
+                총 {state.data.items.length}개 음식 • {state.data.mealType} • {state.data.summary.totalCalories} kcal
+              </p>
               
               <div className="bg-white rounded-lg p-6 shadow-sm border mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">분석 결과</h3>
@@ -296,17 +262,62 @@ export default function FoodRecordPage() {
 
                 <div className="space-y-3">
                   {state.data.items.map((item: any, index: number) => (
-                    <div key={index} className="flex justify-between items-center py-2 border-b">
-                      <div>
-                        <p className="font-medium text-gray-900">{item.foodName}</p>
-                        <p className="text-sm text-gray-600">{item.quantity}</p>
+                    <div key={index} className="flex justify-between items-start py-3 border-b last:border-b-0">
+                      <div className="flex-1">
+                        <div className="flex items-center gap-2 mb-1">
+                          <p className="font-semibold text-gray-900">{item.foodName}</p>
+                          {item.confidence && (
+                            <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">
+                              {(item.confidence * 100).toFixed(0)}%
+                            </span>
+                          )}
+                        </div>
+                        <p className="text-sm text-gray-600 mb-2">{item.quantity}</p>
+
+                        {/* 영양성분 정보 */}
+                        <div className="grid grid-cols-2 gap-2 text-xs text-gray-500">
+                          <div>탄수화물: {item.nutrients.carbohydrates.value}{item.nutrients.carbohydrates.unit}</div>
+                          <div>단백질: {item.nutrients.protein.value}{item.nutrients.protein.unit}</div>
+                          <div>지방: {item.nutrients.fat.value}{item.nutrients.fat.unit}</div>
+                          <div>당류: {item.nutrients.sugars.value}{item.nutrients.sugars.unit}</div>
+                        </div>
                       </div>
-                      <p className="font-semibold text-blue-600">{item.calories} kcal</p>
+                      <div className="text-right ml-4">
+                        <p className="font-bold text-lg text-blue-600">{item.calories}</p>
+                        <p className="text-sm text-gray-500">kcal</p>
+                      </div>
                     </div>
                   ))}
-                  <div className="flex justify-between items-center py-2 font-bold text-lg">
-                    <span>총 칼로리</span>
-                    <span className="text-blue-600">{state.data.summary.totalCalories} kcal</span>
+
+                  {/* 요약 정보 */}
+                  <div className="border-t pt-4 mt-4">
+                    <div className="grid grid-cols-3 gap-4 text-center">
+                      <div>
+                        <p className="text-sm text-gray-600">탄수화물</p>
+                        <p className="font-semibold text-blue-600">
+                          {state.data.summary.totalCarbohydrates.value}{state.data.summary.totalCarbohydrates.unit}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">단백질</p>
+                        <p className="font-semibold text-blue-600">
+                          {state.data.summary.totalProtein.value}{state.data.summary.totalProtein.unit}
+                        </p>
+                      </div>
+                      <div>
+                        <p className="text-sm text-gray-600">지방</p>
+                        <p className="font-semibold text-blue-600">
+                          {state.data.summary.totalFat.value}{state.data.summary.totalFat.unit}
+                        </p>
+                      </div>
+                    </div>
+
+                    <div className="flex justify-center items-center mt-4 pt-4 border-t">
+                      <div className="text-center">
+                        <p className="text-lg font-bold text-gray-600">총 칼로리</p>
+                        <p className="text-2xl font-bold text-blue-600">{state.data.summary.totalCalories} kcal</p>
+                      </div>
+                    </div>
                   </div>
                 </div>
               </div>
