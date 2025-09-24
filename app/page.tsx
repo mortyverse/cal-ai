@@ -1,8 +1,18 @@
+'use client'
+
 import { Button } from "@/components/ui/button"
 import { Camera, Zap, BarChart3, Clock, CheckCircle, ArrowRight } from "lucide-react"
 import Link from "next/link"
+import { bypassLogin } from "@/lib/auth-bypass"
+import { useRouter } from "next/navigation"
 
 export default function Home() {
+  const router = useRouter()
+
+  const handleDemoLogin = () => {
+    bypassLogin()
+    router.push('/dashboard')
+  }
   return (
     <div className="min-h-screen bg-gradient-to-br from-blue-50 via-white to-green-50">
       {/* Header */}
@@ -39,18 +49,14 @@ export default function Home() {
             복잡한 입력 없이 단 한 번의 클릭으로 식단 관리를 시작하세요.
           </p>
           <div className="flex flex-col sm:flex-row gap-4 justify-center items-center">
-            <Link href="/auth">
-              <Button size="lg" className="px-8 py-4 text-lg">
-                <Camera className="w-5 h-5 mr-2" />
-                지금 시작하기
-              </Button>
-            </Link>
-            <Link href="/auth">
-              <Button variant="outline" size="lg" className="px-8 py-4 text-lg">
-                데모 보기
-                <ArrowRight className="w-5 h-5 ml-2" />
-              </Button>
-            </Link>
+            <Button onClick={handleDemoLogin} size="lg" className="px-8 py-4 text-lg">
+              <Camera className="w-5 h-5 mr-2" />
+              지금 시작하기
+            </Button>
+            <Button onClick={handleDemoLogin} variant="outline" size="lg" className="px-8 py-4 text-lg">
+              데모 보기
+              <ArrowRight className="w-5 h-5 ml-2" />
+            </Button>
           </div>
         </div>
       </section>
@@ -194,12 +200,10 @@ export default function Home() {
             복잡한 가입 절차 없이 간단한 이메일 인증만으로 
             혁신적인 AI 식단 관리를 경험해보세요.
           </p>
-          <Link href="/auth">
-            <Button size="lg" variant="secondary" className="px-8 py-4 text-lg">
-              <Camera className="w-5 h-5 mr-2" />
-              무료로 시작하기
-            </Button>
-          </Link>
+          <Button onClick={handleDemoLogin} size="lg" variant="secondary" className="px-8 py-4 text-lg">
+            <Camera className="w-5 h-5 mr-2" />
+            무료로 시작하기
+          </Button>
         </div>
       </section>
 
