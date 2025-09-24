@@ -50,9 +50,26 @@ export interface AnalyzeResult {
     summary: NutritionSummary;
     mealType: string;
     imageUrl: string;
+    webhookResponse?: any;
   };
   error?: {
     code: string;
     message: string;
   };
+}
+
+export interface ImageUploadResponse {
+  success: boolean;
+  message: string;
+  webhookResponse?: any;
+  error?: string;
+  details?: string;
+}
+
+export interface WebhookPayload {
+  image: File;
+  timestamp: string;
+  filename: string;
+  size: number;
+  type: string;
 }

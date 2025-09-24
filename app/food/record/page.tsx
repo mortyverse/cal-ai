@@ -7,6 +7,7 @@ import Link from 'next/link'
 import { useRouter } from 'next/navigation'
 import { getMockUser } from '@/lib/auth-bypass'
 import { useEffect } from 'react'
+import { validateImageFile, createImagePreview, revokeImagePreview, formatFileSize } from '@/lib/utils'
 
 type RecordState = 
   | { status: 'idle' }
@@ -28,19 +29,23 @@ export default function FoodRecordPage() {
     }
   }, [router])
 
+  // 컴포넌트 언마운트 시 미리보기 URL 정리
+  useEffect(() => {
+    return () => {
+      if (previewUrl) {
+        revokeImagePreview(previewUrl)
+      }
+    }
+  }, [previewUrl])
+
   const handleFileSelect = (event: React.ChangeEvent<HTMLInputElement>) => {
     const file = event.target.files?.[0]
     if (!file) return
 
     // 파일 유효성 검사
-    if (file.size > 10 * 1024 * 1024) {
-      setState({ status: 'error', error: '파일 크기가 10MB를 초과합니다.' })
-      return
-    }
-
-    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp']
-    if (!allowedTypes.includes(file.type)) {
-      setState({ status: 'error', error: '지원하지 않는 파일 형식입니다. (JPEG, PNG, WebP만 지원)' })
+    const validation = validateImageFile(file)
+    if (!validation.isValid) {
+      setState({ status: 'error', error: validation.error! })
       return
     }
 
@@ -48,7 +53,7 @@ export default function FoodRecordPage() {
     setState({ status: 'idle' })
     
     // 미리보기 URL 생성
-    const url = URL.createObjectURL(file)
+    const url = createImagePreview(file)
     setPreviewUrl(url)
   }
 
@@ -56,20 +61,44 @@ export default function FoodRecordPage() {
     if (!selectedFile) return
 
     try {
-      // 업로드 시뮬레이션
       setState({ status: 'uploading', progress: 0 })
       
-      // 진행률 시뮬레이션
-      for (let i = 0; i <= 100; i += 10) {
-        await new Promise(resolve => setTimeout(resolve, 100))
-        setState({ status: 'uploading', progress: i })
+      // FormData 생성
+      const formData = new FormData()
+      formData.append('image', selectedFile)
+
+      // 진행률 시뮬레이션 시작
+      const progressInterval = setInterval(() => {
+        setState(prev => {
+          if (prev.status === 'uploading' && prev.progress < 90) {
+            return { ...prev, progress: prev.progress + 10 }
+          }
+          return prev
+        })
+      }, 200)
+
+      // API 호출
+      const response = await fetch('/api/upload-image', {
+        method: 'POST',
+        body: formData,
+      })
+
+      const result = await response.json()
+
+      // 진행률 완료
+      clearInterval(progressInterval)
+      setState({ status: 'uploading', progress: 100 })
+      await new Promise(resolve => setTimeout(resolve, 500))
+
+      if (!response.ok) {
+        throw new Error(result.error || '업로드 실패')
       }
 
-      // 분석 시뮬레이션
+      // 분석 시뮬레이션 (웹훅에서 처리된 결과를 기다리는 시간)
       setState({ status: 'analyzing' })
-      await new Promise(resolve => setTimeout(resolve, 2000))
+      await new Promise(resolve => setTimeout(resolve, 3000))
 
-      // 성공 시뮬레이션
+      // 웹훅 응답에서 결과 추출 (실제 구현에서는 웹훅 응답을 기반으로 함)
       const mockResult = {
         items: [
           {
@@ -92,16 +121,25 @@ export default function FoodRecordPage() {
           totalProtein: { value: 12.5, unit: "g" },
           totalFat: { value: 15.8, unit: "g" }
         },
-        mealType: "점심"
+        mealType: "점심",
+        webhookResponse: result.webhookResponse
       }
 
       setState({ status: 'success', data: mockResult })
     } catch (error) {
-      setState({ status: 'error', error: '업로드 중 오류가 발생했습니다.' })
+      console.error('업로드 오류:', error)
+      setState({ 
+        status: 'error', 
+        error: error instanceof Error ? error.message : '업로드 중 오류가 발생했습니다.' 
+      })
     }
   }
 
   const handleRetry = () => {
+    // 미리보기 URL 정리
+    if (previewUrl) {
+      revokeImagePreview(previewUrl)
+    }
     setState({ status: 'idle' })
     setSelectedFile(null)
     setPreviewUrl(null)
@@ -177,6 +215,9 @@ export default function FoodRecordPage() {
                     />
                     <button
                       onClick={() => {
+                        if (previewUrl) {
+                          revokeImagePreview(previewUrl)
+                        }
                         setSelectedFile(null)
                         setPreviewUrl(null)
                       }}
@@ -187,7 +228,7 @@ export default function FoodRecordPage() {
                   </div>
                   <div className="text-center">
                     <p className="text-sm text-gray-600 mb-4">
-                      선택된 파일: {selectedFile.name} ({(selectedFile.size / 1024 / 1024).toFixed(1)}MB)
+                      선택된 파일: {selectedFile.name} ({formatFileSize(selectedFile.size)})
                     </p>
                     <Button onClick={handleUpload} size="lg" className="px-8">
                       <Camera className="w-5 h-5 mr-2" />
@@ -242,6 +283,17 @@ export default function FoodRecordPage() {
               
               <div className="bg-white rounded-lg p-6 shadow-sm border mb-6">
                 <h3 className="text-lg font-semibold text-gray-900 mb-4">분석 결과</h3>
+
+                {/* 디버그 정보 */}
+                {state.data.webhookResponse && (
+                  <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                    <p className="text-sm font-medium text-gray-700 mb-2">웹훅 응답:</p>
+                    <pre className="text-xs text-gray-600 bg-white p-2 rounded border overflow-x-auto">
+                      {JSON.stringify(state.data.webhookResponse, null, 2)}
+                    </pre>
+                  </div>
+                )}
+
                 <div className="space-y-3">
                   {state.data.items.map((item: any, index: number) => (
                     <div key={index} className="flex justify-between items-center py-2 border-b">
