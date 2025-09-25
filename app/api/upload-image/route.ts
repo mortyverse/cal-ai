@@ -1,23 +1,12 @@
 import { NextRequest, NextResponse } from 'next/server'
 import { parseWebhookResponse } from '@/lib/utils'
 import { type AnalyzeResult } from '@/lib/types/food'
-import { createClient } from '@/lib/supabase/server'
+import { getMockUser } from '@/lib/auth-bypass'
 
 const WEBHOOK_URL = 'https://leehan.app.n8n.cloud/webhook-test/3f7989cc-4003-4635-a611-33bcdb90ca93'
 
 export async function POST(request: NextRequest) {
   try {
-    const supabase = await createClient()
-    const {
-      data: { user },
-    } = await supabase.auth.getUser()
-
-    if (!user) {
-      console.error('❌ 인증되지 않은 사용자')
-      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
-    }
-    console.log('👤 인증된 사용자:', user.id)
-
     console.log('🖼️ 이미지 업로드 API 호출됨')
 
     const formData = await request.formData()
@@ -58,10 +47,13 @@ export async function POST(request: NextRequest) {
 
     console.log('✅ 파일 검증 통과, 웹훅 전송 시작')
 
+    // Mock 사용자 ID
+    const mockUserId = 'mock-user-id'
+
     // 웹훅으로 이미지 전송
     const webhookFormData = new FormData()
     webhookFormData.append('image', file)
-    webhookFormData.append('userId', user.id)
+    webhookFormData.append('userId', mockUserId)
     webhookFormData.append('timestamp', new Date().toISOString())
     webhookFormData.append('filename', file.name)
     webhookFormData.append('size', file.size.toString())
@@ -69,49 +61,69 @@ export async function POST(request: NextRequest) {
 
     console.log('🚀 웹훅 전송 시작:', {
       url: WEBHOOK_URL,
-      userId: user.id,
+      userId: mockUserId,
       filename: file.name,
       size: file.size,
       type: file.type,
     })
 
-    const webhookResponse = await fetch(WEBHOOK_URL, {
-      method: 'POST',
-      body: webhookFormData,
-    })
+    try {
+      const webhookResponse = await fetch(WEBHOOK_URL, {
+        method: 'POST',
+        body: webhookFormData,
+      })
 
-    console.log('📡 웹훅 응답 상태:', {
-      status: webhookResponse.status,
-      statusText: webhookResponse.statusText,
-      headers: Object.fromEntries(webhookResponse.headers.entries()),
-    })
-
-    if (!webhookResponse.ok) {
-      const errorText = await webhookResponse.text()
-      console.error('❌ 웹훅 전송 실패:', {
+      console.log('📡 웹훅 응답 상태:', {
         status: webhookResponse.status,
         statusText: webhookResponse.statusText,
-        response: errorText,
+        headers: Object.fromEntries(webhookResponse.headers.entries()),
       })
-      throw new Error(`웹훅 전송 실패: ${webhookResponse.status} - ${errorText}`)
-    }
 
-    const webhookResult = await webhookResponse.json()
+      if (!webhookResponse.ok) {
+        const errorText = await webhookResponse.text()
+        console.error('❌ 웹훅 전송 실패:', {
+          status: webhookResponse.status,
+          statusText: webhookResponse.statusText,
+          response: errorText,
+        })
+        throw new Error(`웹훅 전송 실패: ${webhookResponse.status} - ${errorText}`)
+      }
 
-    console.log('✅ 웹훅 전송 성공:', {
-      success: true,
-      webhookResponse: webhookResult,
-    })
+      const webhookResult = await webhookResponse.json()
 
-    // 웹훅 응답을 분석 결과로 변환
-    const analyzeResult = parseWebhookResponse(webhookResult)
+      console.log('✅ 웹훅 전송 성공:', {
+        success: true,
+        webhookResponse: webhookResult,
+      })
 
-    if (!analyzeResult.success) {
-      console.error('❌ 웹훅 응답 파싱 실패:', analyzeResult.error)
+      // 웹훅 응답을 분석 결과로 변환
+      const analyzeResult = parseWebhookResponse(webhookResult)
+
+      if (!analyzeResult.success) {
+        console.error('❌ 웹훅 응답 파싱 실패:', analyzeResult.error)
+        return NextResponse.json({
+          success: false,
+          error: analyzeResult.error?.message || '분석 결과를 처리할 수 없습니다.',
+          details: '웹훅 응답을 분석하는 중 오류가 발생했습니다.',
+          debug: {
+            originalFile: {
+              name: file.name,
+              size: file.size,
+              type: file.type,
+            },
+            webhookUrl: WEBHOOK_URL,
+            responseStatus: webhookResponse.status,
+            webhookResponse: webhookResult,
+          }
+        }, { status: 422 })
+      }
+
+      console.log('✅ 분석 결과 변환 완료:', analyzeResult.data)
+
       return NextResponse.json({
-        success: false,
-        error: analyzeResult.error?.message || '분석 결과를 처리할 수 없습니다.',
-        details: '웹훅 응답을 분석하는 중 오류가 발생했습니다.',
+        success: true,
+        message: '이미지가 성공적으로 분석되었습니다.',
+        data: analyzeResult.data,
         debug: {
           originalFile: {
             name: file.name,
@@ -120,37 +132,36 @@ export async function POST(request: NextRequest) {
           },
           webhookUrl: WEBHOOK_URL,
           responseStatus: webhookResponse.status,
-          webhookResponse: webhookResult,
         }
-      }, { status: 422 })
+      })
+
+    } catch (webhookError) {
+      console.error('❌ 웹훅 전송 중 오류:', webhookError)
+      
+      // 웹훅 실패 시에도 기본 응답 반환
+      return NextResponse.json({
+        success: true,
+        message: '파일이 수신되었지만 웹훅 전송에 실패했습니다.',
+        data: {
+          fileName: file.name,
+          fileSize: file.size,
+          fileType: file.type,
+          receivedAt: new Date().toISOString(),
+          webhookError: webhookError instanceof Error ? webhookError.message : '알 수 없는 웹훅 오류'
+        }
+      })
     }
-
-    console.log('✅ 분석 결과 변환 완료:', analyzeResult.data)
-
-    return NextResponse.json({
-      success: true,
-      message: '이미지가 성공적으로 분석되었습니다.',
-      data: analyzeResult.data,
-      debug: {
-        originalFile: {
-          name: file.name,
-          size: file.size,
-          type: file.type,
-        },
-        webhookUrl: WEBHOOK_URL,
-        responseStatus: webhookResponse.status,
-      }
-    })
 
   } catch (error) {
     console.error('💥 이미지 업로드 오류:', error)
+    console.error('💥 에러 스택:', error instanceof Error ? error.stack : 'No stack trace')
     return NextResponse.json(
       {
         error: '이미지 업로드 중 오류가 발생했습니다.',
         details: error instanceof Error ? error.message : '알 수 없는 오류',
         debug: {
-          webhookUrl: WEBHOOK_URL,
           timestamp: new Date().toISOString(),
+          errorType: error instanceof Error ? error.constructor.name : typeof error,
         }
       },
       { status: 500 }
