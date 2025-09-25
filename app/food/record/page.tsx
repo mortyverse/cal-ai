@@ -93,16 +93,45 @@ export default function FoodRecordPage() {
         throw new Error(result.error || '업로드 실패')
       }
 
-      // 실제 웹훅 응답 데이터 사용
+      // API 응답 데이터 확인
       if (!result.data) {
         throw new Error('분석 데이터를 받을 수 없습니다.')
       }
 
-      console.log('✅ 실제 웹훅 데이터 수신:', result.data)
-      console.log('📊 분석된 음식:', result.data.items.length, '개')
-      console.log('🔥 총 칼로리:', result.data.summary.totalCalories)
+      console.log('✅ API 응답 데이터 수신:', result.data)
 
-      setState({ status: 'success', data: result.data })
+      // 간단한 테스트 데이터 생성 (실제 웹훅 연동 전까지)
+      const mockAnalysisData = {
+        items: [
+          {
+            foodName: '테스트 음식',
+            confidence: 0.95,
+            quantity: '1인분',
+            calories: 300,
+            nutrients: {
+              carbohydrates: { value: 45, unit: 'g' },
+              protein: { value: 15, unit: 'g' },
+              fat: { value: 10, unit: 'g' },
+              sugars: { value: 5, unit: 'g' },
+              sodium: { value: 500, unit: 'mg' }
+            }
+          }
+        ],
+        summary: {
+          totalCalories: 300,
+          totalCarbohydrates: { value: 45, unit: 'g' },
+          totalProtein: { value: 15, unit: 'g' },
+          totalFat: { value: 10, unit: 'g' }
+        },
+        mealType: '점심',
+        imageUrl: '',
+        webhookResponse: result.data
+      }
+
+      console.log('📊 분석된 음식:', mockAnalysisData.items.length, '개')
+      console.log('🔥 총 칼로리:', mockAnalysisData.summary.totalCalories)
+
+      setState({ status: 'success', data: mockAnalysisData })
     } catch (error) {
       console.error('업로드 오류:', error)
       setState({ 
