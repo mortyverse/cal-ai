@@ -1,5 +1,6 @@
 import { clsx, type ClassValue } from "clsx"
 import { twMerge } from "tailwind-merge"
+import { type AnalyzeResult, type FoodItem, type NutritionSummary } from "@/lib/types/food"
 
 export function cn(...inputs: ClassValue[]) {
   return twMerge(clsx(inputs))

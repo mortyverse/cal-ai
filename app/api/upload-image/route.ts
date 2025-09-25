@@ -1,10 +1,23 @@
 import { NextRequest, NextResponse } from 'next/server'
-import { parseWebhookResponse, type AnalyzeResult } from '@/lib/utils'
+import { parseWebhookResponse } from '@/lib/utils'
+import { type AnalyzeResult } from '@/lib/types/food'
+import { createClient } from '@/lib/supabase/server'
 
 const WEBHOOK_URL = 'https://leehan.app.n8n.cloud/webhook-test/3f7989cc-4003-4635-a611-33bcdb90ca93'
 
 export async function POST(request: NextRequest) {
   try {
+    const supabase = await createClient()
+    const {
+      data: { user },
+    } = await supabase.auth.getUser()
+
+    if (!user) {
+      console.error('❌ 인증되지 않은 사용자')
+      return NextResponse.json({ error: '인증이 필요합니다.' }, { status: 401 })
+    }
+    console.log('👤 인증된 사용자:', user.id)
+
     console.log('🖼️ 이미지 업로드 API 호출됨')
 
     const formData = await request.formData()
@@ -48,6 +61,7 @@ export async function POST(request: NextRequest) {
     // 웹훅으로 이미지 전송
     const webhookFormData = new FormData()
     webhookFormData.append('image', file)
+    webhookFormData.append('userId', user.id)
     webhookFormData.append('timestamp', new Date().toISOString())
     webhookFormData.append('filename', file.name)
     webhookFormData.append('size', file.size.toString())
@@ -55,6 +69,7 @@ export async function POST(request: NextRequest) {
 
     console.log('🚀 웹훅 전송 시작:', {
       url: WEBHOOK_URL,
+      userId: user.id,
       filename: file.name,
       size: file.size,
       type: file.type,
